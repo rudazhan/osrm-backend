@@ -48,6 +48,7 @@ Thumbs.db
 /example/build/
 /test/data/monaco*
 /cmake/postinst
+cmake-build-debug/
 
 # Eclipse related files #
 #########################
@@ -94,3 +95,4 @@ node_modules
 /server.ini
 
 *.swp
+.idea/
