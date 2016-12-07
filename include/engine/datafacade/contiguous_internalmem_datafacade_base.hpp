@@ -418,6 +418,10 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
 
     unsigned GetNumberOfEdges() const override final { return m_query_graph->GetNumberOfEdges(); }
 
+    // NOTE: by ruda
+    unsigned GetNumberOfGeometryNodes() const { return m_geometry_node_list.size(); }
+    unsigned GetNumberOfGeometryEdges() const { return m_geometry_indices.size(); }
+
     unsigned GetOutDegree(const NodeID n) const override final
     {
         return m_query_graph->GetOutDegree(n);

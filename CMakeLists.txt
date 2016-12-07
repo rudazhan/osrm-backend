@@ -17,7 +17,7 @@ endif()
 option(ENABLE_MASON "Use mason for dependencies" OFF)
 option(ENABLE_CCACHE "Speed up incremental rebuilds via ccache" ON)
 option(BUILD_TOOLS "Build OSRM tools" OFF)
-option(BUILD_COMPONENTS "Build osrm-components" OFF)
+option(BUILD_COMPONENTS "Build osrm-components" ON)
 option(ENABLE_ASSERTIONS "Use assertions in release mode" OFF)
 option(ENABLE_COVERAGE "Build with coverage instrumentalisation" OFF)
 option(ENABLE_SANITIZER "Use memory sanitizer for Debug build" OFF)
@@ -721,6 +721,8 @@ add_custom_target(uninstall
 # Modular build system: each directory registered here provides its own CMakeLists.txt
 add_subdirectory(unit_tests)
 add_subdirectory(src/benchmarks)
+#add_subdirectory(example)
+add_subdirectory(src/tools)
 
 if (ENABLE_FUZZING)
   # Requires libosrm being built with sanitizers; make configurable and default to ubsan

@@ -15,22 +15,15 @@
 #include <iostream>
 #include <string>
 #include <utility>
-
 #include <cstdlib>
 
-int main(int argc, const char *argv[])
+int main()
 {
-    if (argc < 2)
-    {
-        std::cerr << "Usage: " << argv[0] << " data.osrm\n";
-        return EXIT_FAILURE;
-    }
-
     using namespace osrm;
 
     // Configure based on a .osrm base path, and no datasets in shared mem from osrm-datastore
     EngineConfig config;
-    config.storage_config = {argv[1]};
+    config.storage_config = {"/home/ruda/repo/CLionProjects/osrm-backend/test/cache/testbot/basic.feature/0647704af42c617a23ec23daffba28f8/831a1ecf7bf4a3771979e1da75d071ad/8_a_single_way_with_two_nodes.osrm"};
     config.use_shared_memory = false;
 
     // Routing machine with several services (such as Route, Table, Nearest, Trip, Match)
@@ -39,9 +32,11 @@ int main(int argc, const char *argv[])
     // The following shows how to use the Route service; configure this service
     RouteParameters params;
 
-    // Route in monaco
-    params.coordinates.push_back({util::FloatLongitude{7.419758}, util::FloatLatitude{43.731142}});
-    params.coordinates.push_back({util::FloatLongitude{7.419505}, util::FloatLatitude{43.736825}});
+    // Route
+    params.coordinates.push_back({util::FloatLongitude{1.0008990679362704}, util::FloatLatitude{1.0}});
+    params.coordinates.push_back({util::FloatLongitude{1.0}, util::FloatLatitude{1.0}});
+    params.annotations = true;
+    params.steps = true;
 
     // Response is in JSON format
     json::Object result;
@@ -57,6 +52,15 @@ int main(int argc, const char *argv[])
         auto &route = routes.values.at(0).get<json::Object>();
         const auto distance = route.values["distance"].get<json::Number>().value;
         const auto duration = route.values["duration"].get<json::Number>().value;
+        auto &legs = route.values["legs"].get<json::Array>();
+        auto &leg = legs.values.at(0).get<json::Object>();
+        auto &annotation = leg.values["annotation"].get<json::Object>();
+        auto nodes = annotation.values["nodes"].get<json::Array>().values;
+//        auto vnode = std::vector<double>(nodes.size());
+        std::vector<double> vnode;
+        for (const auto & v : nodes) {
+            vnode.push_back(v.get<json::Number>().value);
+        }
 
         // Warn users if extract does not contain the default Berlin coordinates from above
         if (distance == 0 or duration == 0)
