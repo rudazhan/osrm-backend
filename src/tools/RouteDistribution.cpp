@@ -22,6 +22,9 @@ using DataWatchdog = osrm::engine::DataWatchdog;
 using SharedMemoryDataFacade = osrm::engine::datafacade::SharedMemoryDataFacade;
 using BaseDataFacade = osrm::engine::datafacade::BaseDataFacade;
 
+using std::cout;
+using std::endl;
+
 //std::vector<NodeID> RouteDistribution(const ContiguousInternalMemoryDataFacadeBase &facade, const double** &trip_frequency)
 //{
 //    QueryHeap query_heap;
@@ -89,21 +92,55 @@ int main()
     std::tie(lock, facade) = watchdog->GetDataFacade();
     auto shared_facade = std::dynamic_pointer_cast<SharedMemoryDataFacade>(facade);
 
-    std::cout << shared_facade->GetNumberOfGeometryNodes() << std::endl;
-    std::cout << shared_facade->GetNumberOfGeometryEdges() << std::endl;
-    static auto N = shared_facade->GetNumberOfNodes();
-    static auto E = shared_facade->GetNumberOfEdges();
-    for (auto e = 0; e < 0; e++) {
-        std::cout << shared_facade->GetEdgeData(e).id << " ";
-        std::cout << shared_facade->GetTarget(e) << std::endl;
-    }
-    std::cout << facade->GetNumberOfNodes() << std::endl;
-//    for (auto i = 0; i < 10; i++) {
-//        for(auto edge : shared_facade->GetAdjacentEdgeRange(N-i-1))
-//            std::cout << edge << " ";
-//        std::cout << std::endl;
-//    }
+// logs from Extractor::run()
+//    [info] Raw input contains 9499 nodes, 2648 ways, and 1171 relations
+//    [info] usable restrictions: 98                        (OSM relations)
+//    [info] Importing number_of_nodes new = 8977 nodes     (OSM Nodes; OSMNodeID, NodeID) locations
+//    [info]  - 0 bollard nodes, 2418 traffic lights        (relevant node tags)
+//    [info]  and 11489 edges                               (OSM edges) undirected segment
+//    [info] Generated 11342 nodes in edge-expanded graph   (.ebg nodes) undirected segment
+//    (r-tree of ebg nodes build on-top of OSM coordinates/nodes)
+//    [info] Node-based graph contains 6628 edges           (m_query_graph nodes) one-directional compressed edge
+//    [info] Edge-expanded graph ...
+//    [info]   contains 12548 edges                         (.ebg edges) undirected maneuver; {12548/11342 too small!}
+//    [info] large component [11]=6592                      (large component index & size)
+// logs from Contractor::Run()
+//    [info] merged 25098 edges out of 50192                (contractor_graph before & difference) insignificant.
+//    [info] [core] 0 nodes 25484 edges.                    (contractor_graph nodes and edges) both could be zero
+//    [info] Serializing compacted graph of 42431 edges     (m_query_graph edges, including shortcuts)
+//    [info] Writing CRC32: 1607520478                      (checksum)
 
-    return EXIT_SUCCESS;
+    shared_facade->PrintStatistics();
+    cout << "m_query_graph:" << endl;
+    const auto N = shared_facade->GetNumberOfNodes();
+    for (auto n = 0u; n < N; n++) {
+        cout << '\t' << "Node " << n << ": ";
+        auto edge_range = shared_facade->GetAdjacentEdgeRange(n);
+        cout << "first edge " << edge_range.front() << ", ";
+        cout << "out degree " << shared_facade->GetOutDegree(n) << endl;
+        BOOST_ASSERT_MSG(edge_range.size() == shared_facade->GetOutDegree(n), "Edge range does not match out degree!");
+    }
+    const auto E = shared_facade->GetNumberOfEdges();
+    auto counts = 0u;
+    for (auto e = 0u; e < E; e++) {
+        cout << '\t' << "Edge " << e << ": ";
+        cout << "target " << shared_facade->GetTarget(e) << "; ";
+        auto edge_data = shared_facade->GetEdgeData(e);
+        if (edge_data.forward) cout << "forward ";
+        if (edge_data.backward) cout << "backward ";
+        cout << "weight " << edge_data.weight << "; ";
+        if (edge_data.shortcut) {
+            counts++;
+            cout << "is shortcut, ";
+            cout << "the middle node of the shortcut " << shared_facade->GetEdgeData(e).id << "; ";
+        } else {
+            cout << "data in compressed edge " << edge_data.id << "; ";
+        }
+        cout << endl;
+    }
+    cout << "Number of m_query_graph shortcut edges: " << counts << endl;
+    cout << facade->GetNumberOfNodes() << endl;
+
 //    auto supply_rate = RouteDistribution(facade, trip_frequency);
+    return EXIT_SUCCESS;
 }

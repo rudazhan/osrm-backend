@@ -419,8 +419,39 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
     unsigned GetNumberOfEdges() const override final { return m_query_graph->GetNumberOfEdges(); }
 
     // NOTE: by ruda
-    unsigned GetNumberOfGeometryNodes() const { return m_geometry_node_list.size(); }
-    unsigned GetNumberOfGeometryEdges() const { return m_geometry_indices.size(); }
+    void PrintStatistics() const {
+        using std::cout;
+        using std::endl;
+        cout << "OSMNodeID and coordinates: (" << m_osmnodeid_list.size() << " in total)" << endl;
+        BOOST_ASSERT_MSG(m_osmnodeid_list.size() == m_coordinate_list.size(), "Numbers of coordinates and OSMNodeID do not match!");
+        for (auto node_id = 0u; node_id < m_osmnodeid_list.size(); node_id++) {
+            cout << '\t' << GetOSMNodeIDOfNode(node_id) << ": " << GetCoordinateOfNode(node_id) << endl;
+        }
+        cout << "Compressed edges: (" << m_via_geometry_list.size() << " in total)" << endl;
+        BOOST_ASSERT_MSG(m_via_geometry_list.size() == m_geometry_indices.size(), "Numbers of geometries and lookup segments do not match!");
+        std::set<EdgeID> geometries;
+        for (auto e = 0u; e < m_via_geometry_list.size(); e++) {
+            cout << '\t' << e << ": ";
+            auto gid = m_via_geometry_list.at(e);
+            cout << (gid.forward ? "forward" : "reverse") << " geometry " << gid.id << endl;
+            geometries.insert(gid.id);
+        }
+        cout << "Geometries (and routing data): (" << geometries.size() << " in total)" << endl;
+        for (auto edge_id : geometries) {
+            cout << '\t' << edge_id << ": ";
+            for (auto node_id : GetUncompressedForwardGeometry(edge_id)) cout << node_id << " ";
+            cout << "; forward weights ";
+            for (auto edge_weight : GetUncompressedForwardWeights(edge_id)) cout << edge_weight << " ";
+            cout << "; reverse weights ";
+            for (auto edge_weight : GetUncompressedReverseWeights(edge_id)) cout << edge_weight << " ";
+            cout << endl;
+        }
+        cout << "Number Of undirected maneuver (.ebg edges): " << m_name_ID_list.size() << endl;
+        cout << "Number Of one-directional compressed edge (m_query_graph node): " << GetNumberOfNodes() << endl;
+        BOOST_ASSERT_MSG(m_via_geometry_list.size() == GetNumberOfNodes(), "Numbers of m_query_graph nodes and lookup segments do not match!");
+        cout << "Number Of maneuver (m_query_graph edge, incl. shortcuts): " << GetNumberOfEdges() << endl;
+        cout << "Core size (total nodes): " << GetCoreSize() << endl;
+    }
 
     unsigned GetOutDegree(const NodeID n) const override final
     {
