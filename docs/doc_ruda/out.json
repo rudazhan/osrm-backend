@@ -1,0 +1,114 @@
+{
+  "code": "Ok",
+  "routes": [
+    {
+      "distance": 100,
+      "duration": 10,
+      "geometry": "_ibE_ibE?sD",
+      "legs": [
+        {
+          "annotation": {
+            "datasources": [
+              0
+            ],
+            "distance": [
+              99.977214
+            ],
+            "duration": [
+              10
+            ],
+            "nodes": [
+              1,
+              2
+            ]
+          },
+          "distance": 100,
+          "duration": 10,
+          "steps": [
+            {
+              "distance": 100,
+              "duration": 10,
+              "geometry": "_ibE_ibE?sD",
+              "intersections": [
+                {
+                  "bearings": [
+                    90
+                  ],
+                  "entry": [
+                    true
+                  ],
+                  "location": [
+                    1,
+                    1
+                  ],
+                  "out": 0
+                }
+              ],
+              "maneuver": {
+                "bearing_after": 90,
+                "bearing_before": 0,
+                "location": [
+                  1,
+                  1
+                ],
+                "type": "depart"
+              },
+              "mode": "driving",
+              "name": "ab"
+            },
+            {
+              "distance": 0,
+              "duration": 0,
+              "geometry": "_ibEsnbE",
+              "intersections": [
+                {
+                  "bearings": [
+                    270
+                  ],
+                  "entry": [
+                    true
+                  ],
+                  "in": 0,
+                  "location": [
+                    1.000899,
+                    1
+                  ]
+                }
+              ],
+              "maneuver": {
+                "bearing_after": 0,
+                "bearing_before": 90,
+                "location": [
+                  1.000899,
+                  1
+                ],
+                "type": "arrive"
+              },
+              "mode": "driving",
+              "name": "ab"
+            }
+          ],
+          "summary": "ab"
+        }
+      ]
+    }
+  ],
+  "waypoints": [
+    {
+      "hint": "AAAAgAEAAIAEAAAAAAAAAGQAAAAAAAAAAAAAAAAAAAABAACAQEIPAEBCDwBAQg8AQEIPAAAAAQGa0jWE",
+      "location": [
+        1,
+        1
+      ],
+      "name": "ab"
+    },
+    {
+      "hint": "AAAAgAEAAIAEAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAABAACAw0UPAEBCDwDDRQ8AQEIPAAAAAQGa0jWE",
+      "location": [
+        1.000899,
+        1
+      ],
+      "name": "ab"
+    }
+  ]
+}
