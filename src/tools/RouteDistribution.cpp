@@ -8,6 +8,7 @@
 #include "util/integer_range.hpp"
 #include "util/timing_util.hpp"
 #include "util/typedefs.hpp"
+#include "util/csv_reader.hpp"
 
 #include <boost/assert.hpp>
 
@@ -26,12 +27,13 @@ using std::cout;
 using std::endl;
 
 //std::vector<NodeID> RouteDistribution(const ContiguousInternalMemoryDataFacadeBase &facade, const double** &trip_frequency)
+//// consider add vector of aggregated trip duration
 //{
 //    QueryHeap query_heap;
 //    std::vector<NodeID> distribution;
 //    auto weight = INVALID_EDGE_WEIGHT;
 //
-//    // get all edgeBasedNode from facade
+//    // get all edgeBasedNode (core nodes) from facade
 //
 //    // for each source edgeBasedNode, do forward complete Dijkstra search
 //
@@ -78,12 +80,9 @@ using std::endl;
 
 int main()
 {
-//    osrm::engine::EngineConfig config;  // defaults to shared memory
-//    osrm::engine::Engine engine{config};
-
     // use shared memory
     if (!DataWatchdog::TryConnect())
-        throw osrm::util::exception("No shared memory blocks found, have you forgotten to run osrm-datastore?");
+        throw osrm::util::exception("No shared memory blocks found, have you ran osrm-datastore?");
     auto watchdog = std::make_unique<DataWatchdog>();
     BOOST_ASSERT(watchdog);
 
@@ -92,26 +91,39 @@ int main()
     std::tie(lock, facade) = watchdog->GetDataFacade();
     auto shared_facade = std::dynamic_pointer_cast<SharedMemoryDataFacade>(facade);
 
-// logs from Extractor::run()
-//    [info] Raw input contains 9499 nodes, 2648 ways, and 1171 relations
-//    [info] usable restrictions: 98                        (OSM relations)
-//    [info] Importing number_of_nodes new = 8977 nodes     (OSM Nodes; OSMNodeID, NodeID) locations
-//    [info]  - 0 bollard nodes, 2418 traffic lights        (relevant node tags)
-//    [info]  and 11489 edges                               (OSM edges) undirected segment
-//    [info] Generated 11342 nodes in edge-expanded graph   (.ebg nodes) undirected segment
-//    (r-tree of ebg nodes build on-top of OSM coordinates/nodes)
-//    [info] Node-based graph contains 6628 edges           (m_query_graph nodes) one-directional compressed edge
-//    [info] Edge-expanded graph ...
-//    [info]   contains 12548 edges                         (.ebg edges) undirected maneuver; {12548/11342 too small!}
-//    [info] large component [11]=6592                      (large component index & size)
-// logs from Contractor::Run()
-//    [info] merged 25098 edges out of 50192                (contractor_graph before & difference) insignificant.
-//    [info] [core] 0 nodes 25484 edges.                    (contractor_graph nodes and edges) both could be zero
-//    [info] Serializing compacted graph of 42431 edges     (m_query_graph edges, including shortcuts)
-//    [info] Writing CRC32: 1607520478                      (checksum)
-
+    // OSRM graph statistics and representation;
     shared_facade->PrintStatistics();
-    cout << "m_query_graph:" << endl;
+//    shared_facade->PrintLocations();
+//    shared_facade->PrintCompressedGeometry();
+//    shared_facade->WriteCompressedGeometry();
+
+    // Map matching
+    std::ifstream location_file{"locations.csv"};
+    if (!location_file) throw osrm::util::exception("locations.csv not found!");
+    // discard header line
+    location_file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    // format: lng,lat
+    csv<int, int> lnglat_table(location_file, ',');
+    std::ofstream edge_file{"nearest_edge.csv"};
+    if (!edge_file) throw osrm::util::exception("nearest_edge.csv cannot be created!");
+
+    TIMER_START(matching);
+    auto fp_multiplier = 1E5;
+    edge_file << "lng,lat,edge" << endl;
+    for (auto row : lnglat_table) {
+        using std::get;
+        auto fp_lng = get<0>(row);
+        auto fp_lat = get<1>(row);
+        // matching to nearest compressed geometry EdgeID;
+        // 23th St between 6th & 7th Ave: (-73.99417, 40.74351)
+        auto edge = shared_facade->NearestEdge(fp_lng / fp_multiplier, fp_lat / fp_multiplier).packed_geometry_id;
+        edge_file << fp_lng << ',' << fp_lat << ',' << edge << endl;
+    }
+    TIMER_STOP(matching);
+    // 418 sec for 1.6M locations
+    cout << "Geometry matching: " << TIMER_SEC(matching) << " seconds" << endl;
+
+    cout << "m_query_graph: (.hsgr)" << endl;
     const auto N = shared_facade->GetNumberOfNodes();
     for (auto n = 0u; n < N; n++) {
         cout << '\t' << "Node " << n << ": ";
@@ -132,13 +144,13 @@ int main()
         if (edge_data.shortcut) {
             counts++;
             cout << "is shortcut, ";
-            cout << "the middle node of the shortcut " << shared_facade->GetEdgeData(e).id << "; ";
+            cout << "the contracted node of the shortcut " << shared_facade->GetEdgeData(e).id << "; ";
         } else {
-            cout << "data in compressed edge " << edge_data.id << "; ";
+            cout << "source directed compressed segment " << edge_data.id << "; ";
         }
         cout << endl;
     }
-    cout << "Number of m_query_graph shortcut edges: " << counts << endl;
+    cout << "Number of shortcut edges in core network: " << counts << endl;
     cout << facade->GetNumberOfNodes() << endl;
 
 //    auto supply_rate = RouteDistribution(facade, trip_frequency);

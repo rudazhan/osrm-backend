@@ -11,5 +11,5 @@ set(EXTERNAL_LIBRARIES
         ${MAYBE_RT_LIBRARY}
         ${MAYBE_COVERAGE_LIBRARIES})
 
-add_executable(route-distribution RouteDistribution.cpp $<TARGET_OBJECTS:UTIL>)
+add_executable(route-distribution RouteDistribution.cpp $<TARGET_OBJECTS:UTIL> ../../include/util/csv_reader.hpp)
 target_link_libraries(route-distribution osrm ${EXTERNAL_LIBRARIES})

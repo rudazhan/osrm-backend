@@ -422,35 +422,87 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
     void PrintStatistics() const {
         using std::cout;
         using std::endl;
-        cout << "OSMNodeID and coordinates: (" << m_osmnodeid_list.size() << " in total)" << endl;
+        cout << "Number Of locations (OSMNodeID, Coordinates): " << m_osmnodeid_list.size() << endl;
         BOOST_ASSERT_MSG(m_osmnodeid_list.size() == m_coordinate_list.size(), "Numbers of coordinates and OSMNodeID do not match!");
-        for (auto node_id = 0u; node_id < m_osmnodeid_list.size(); node_id++) {
-            cout << '\t' << GetOSMNodeIDOfNode(node_id) << ": " << GetCoordinateOfNode(node_id) << endl;
-        }
-        cout << "Compressed edges: (" << m_via_geometry_list.size() << " in total)" << endl;
-        BOOST_ASSERT_MSG(m_via_geometry_list.size() == m_geometry_indices.size(), "Numbers of geometries and lookup segments do not match!");
+//        PrintLocations();
+        cout << "Via geometry for each maneuver: (" << m_via_geometry_list.size() << " in total)" << endl;
         std::set<EdgeID> geometries;
         for (auto e = 0u; e < m_via_geometry_list.size(); e++) {
-            cout << '\t' << e << ": ";
             auto gid = m_via_geometry_list.at(e);
-            cout << (gid.forward ? "forward" : "reverse") << " geometry " << gid.id << endl;
+//            cout << '\t' << e << ": " << (gid.forward ? "forward" : "reverse") << " geometry " << gid.id << endl;
             geometries.insert(gid.id);
         }
-        cout << "Geometries (and routing data): (" << geometries.size() << " in total)" << endl;
+        cout << "Number of geometry indices: " << m_geometry_indices.size() << endl;
+        cout << "Number of strongly connected components: " << m_geometry_indices.size() - geometries.size() << endl;
+        cout << "Number of compressed geometries (segment durations): " << geometries.size() << endl;
+//        PrintCompressedGeometry();
+        cout << "Number Of directed compressed segments: " << GetCoreSize() << endl;
+//        BOOST_ASSERT_MSG(GetCoreSize() == geometries.size() * 2, "Each compressed segment shall have two directed versions if not one-way.");
+        cout << "Number Of core nodes: " << GetNumberOfNodes() << endl;
+        BOOST_ASSERT_MSG(GetNumberOfNodes() == GetCoreSize(), "Query graph is contracted.");
+        cout << "Number Of forward maneuvers (.ebg edge, via geometry): " << m_via_geometry_list.size() << endl;
+        BOOST_ASSERT_MSG(m_via_geometry_list.size() == m_name_ID_list.size(), "Numbers of core network via geometries and name ID do not match!");
+        cout << "Number Of core edge (forward & backward maneuvers): " << GetNumberOfEdges() << endl;
+//        BOOST_ASSERT_MSG(GetNumberOfEdges() == m_via_geometry_list.size() * 2, "Each maneuver shall have two copies (forward & backward) in core network if not merged.");
+    }
+    void PrintLocations() const {
+        using std::cout;
+        using std::endl;
+        const auto locations = m_osmnodeid_list.size();
+        cout << "Node-based graph: " << endl;
+        for (NodeID id = 0u; id < locations; id++)
+            cout << '\t' << id << ": " << GetOSMNodeIDOfNode(id) << ", " << GetCoordinateOfNode(id) << endl;
+    }
+    void PrintCompressedGeometry() const {
+        using std::cout;
+        using std::endl;
+        std::set<EdgeID> geometries;
+        auto maneuvers = m_via_geometry_list.size();
+        for (EdgeID eid = 0u; eid < maneuvers; eid++)
+            geometries.insert(m_via_geometry_list.at(eid).id);
+        cout << "Compressed geometries (segment durations): " << geometries.size() << endl;
         for (auto edge_id : geometries) {
             cout << '\t' << edge_id << ": ";
-            for (auto node_id : GetUncompressedForwardGeometry(edge_id)) cout << node_id << " ";
-            cout << "; forward weights ";
-            for (auto edge_weight : GetUncompressedForwardWeights(edge_id)) cout << edge_weight << " ";
-            cout << "; reverse weights ";
-            for (auto edge_weight : GetUncompressedReverseWeights(edge_id)) cout << edge_weight << " ";
+            for (auto node_id : GetUncompressedForwardGeometry(edge_id)) cout << node_id << ", ";
             cout << endl;
         }
-        cout << "Number Of undirected maneuver (.ebg edges): " << m_name_ID_list.size() << endl;
-        cout << "Number Of one-directional compressed edge (m_query_graph node): " << GetNumberOfNodes() << endl;
-        BOOST_ASSERT_MSG(m_via_geometry_list.size() == GetNumberOfNodes(), "Numbers of m_query_graph nodes and lookup segments do not match!");
-        cout << "Number Of maneuver (m_query_graph edge, incl. shortcuts): " << GetNumberOfEdges() << endl;
-        cout << "Core size (total nodes): " << GetCoreSize() << endl;
+    }
+    void WriteCompressedGeometry() const {
+        using namespace std::string_literals;
+        auto out_file = "osrm-geometry.osm.opl"s;
+        std::ofstream opl{out_file, std::ios_base::trunc};
+        if (opl) {
+            using std::endl;
+            using osrm::util::toFloating;
+            const auto locations = m_osmnodeid_list.size();
+            for (NodeID id = 0u; id < locations; id++) {
+                auto coordinate = GetCoordinateOfNode(id);
+                opl << 'n' << id << " Tnodeid=" << GetOSMNodeIDOfNode(id);
+                opl << std::setprecision(12) << " x" << toFloating(coordinate.lon);
+                opl << " y" << toFloating(coordinate.lat) << endl;
+            }
+            std::set<EdgeID> geometries;
+            auto maneuvers = m_via_geometry_list.size();
+            for (EdgeID eid = 0u; eid < maneuvers; eid++)
+                geometries.insert(m_via_geometry_list.at(eid).id);
+            for (auto edge_id : geometries) {
+                opl << 'w' << edge_id << " N";
+                for (auto node_id : GetUncompressedForwardGeometry(edge_id)) {
+                    // the last comma shall be removed before piping to osmium.
+                    // sed -r 's/,$//' osrm-geometry.osm.opl | osmium cat -F opl -o osrm-geometry.osm
+                    opl << 'n' << node_id << ',';
+                }
+                opl << endl;
+            }
+        } else {
+            throw osrm::util::exception("Failed to open " + out_file + " for writing." + SOURCE_REF);
+        }
+    }
+    osrm::extractor::EdgeBasedNode NearestEdge(double lng_, double lat_) const {
+        osrm::util::FloatLongitude lng{lng_};
+        osrm::util::FloatLatitude lat{lat_};
+        osrm::util::Coordinate position{lng, lat};
+        return m_static_rtree->Nearest(position, 1).front();
     }
 
     unsigned GetOutDegree(const NodeID n) const override final
