@@ -142,7 +142,7 @@ Data types:
 - ID types (non-scoped):
     - `OSMNodeID`: strongly typed `std::uint64_t`;
     - `NodeID`, `EdgeID`, `NameID`: `std::uint32_t`;
-    - `EdgeWeight`: `std::uint32_t`;
+    - `EdgeWeight`: `std::uint32_t`, in deci-second;
     - `SegmentID`: 31-bit `NodeID`, `enabled`;
     - `GeometryID`: 31-bit `NodeID`, `forward`; for directed compressed segments;
 - Graph elements in `osrm::extractor`:
@@ -150,8 +150,8 @@ Data types:
     - `InternalExtractorEdge`
     - `NodeBasedEdge` for segments extracted from OSM ways: `is_split` (bidirectional segment split into two directed edges); `forward`, `backward` (is enabled); `startpoint` (is an entry point (location of penalty) to the graph).
         - `NodeBasedEdgeWithOSM` adds source and target `OSMNodeID`.
-    - `EdgeBasedNode`: source and target locations of penalty `NodeID`; forward and reverse edge-based node `SegmentID` and `TravelMode`; `component` (31-bit `id`, `is_tiny`), compressed geometry ID, `fwd_segment_position` (index within a compressed segment), `name_id`.
-    - `EdgeBasedEdge`: edge `NodeID`; source and target node `NodeID`; 30-bit `EdgeWeight` (penalty plus duration of the source compressed segment); bool `forward`, `backward` (upward/downward graph ?).
+    - `EdgeBasedNode` for segments' identity in the compressed geometry and potential match of directed compressed segments: source and target locations `NodeID`, `name_id`; `component` (31-bit `id`, `is_tiny`), compressed geometry ID, position within the compressed segment `fwd_segment_position`; forward and reverse `SegmentID` (edge-based node NodeID, is enabled) and `TravelMode`.
+    - `EdgeBasedEdge`: edge `NodeID`; source and target node `NodeID`; 30-bit `EdgeWeight` (source compressed segment duration plus penalty); bool `forward`, `backward` (upward/downward graph ?).
 - Graph elements in `osrm::engine`:
     - `PhantomNode`, a point matched on the compressed geometry: `location` and `input_location`; `component` (`id`, `is_tiny`), compressed geometry EdgeID, `fwd_segment_position` (index of component segment); forward and reverse `SegmentID`, weight, and offset, `TravelMode`; `name_id`.
         - `PhantomNodes`, a pair of `PhantomNode` for one segment: `source_phantom` and `target_phantom`.
@@ -168,7 +168,7 @@ Data types:
         - In `osrm::storage`: `using QueryGraph = util::StaticGraph<contractor::QueryEdge::EdgeData>`, as the type of `osrm::engine::datafacade::ContiguousInternalMemoryDataFacadeBase::m_query_graph`;
     - `StaticRTree` for nearest neighbour queries.
         - `m_search_tree`: a vector of `TreeNode` (children `TreeIndex` (index, is_leaf) array of size `BRANCHING_FACTOR`, number of children, minimum bounding `Rectangle`) using shared memory;
-        - `m_leaves`: a vector of `LeafNode` (array of `EdgeDataT` objects, number of objects; minimum bounding `Rectangle`);
+        - `m_leaves`: a vector of `LeafNode` (array of `EdgeDataT` objects; number of objects, minimum bounding `Rectangle`);
         - `m_leaves_region`: leaf node file mapped to memory;
         - `m_coordinate_list`: a vector of `Coordinate`;
 - Heap in `osrm::util`: `BinaryHeap<>`
@@ -188,7 +188,7 @@ Data types:
 1. **Node-based graph**: geographic representation (node = location; edge = segment); `.nodes`, `.osrm`, `.edges`;
 1. **Compressed geometry**: undirected compressed segments; `.geometry`;
 1. **Edge-expanded graph**: logical representation (node = directed compressed segment; edge = forward maneuver); has ID for component graphs and marks small components; `.edge_segment_lookup`, `.ebg`, `.enw`, `.edge_penalties`.
-1. **Contracted hierarchy** (CH): remove duplicate/parallel edges retaining the shortest, merge forward and reverse edges of equal weight into bidirectional edges, otherwise insert separate directed edges; `.hsgr`, `.core`.
+1. **Contraction hierarchy** (CH): remove duplicate/parallel edges retaining the shortest, merge forward and reverse edges of equal weight into bidirectional edges, otherwise insert separate directed edges; `.hsgr`, `.core`.
 
 Compress simple locations with two segments in total which are compatible (`NodeBasedEdgeData::IsCompatibleTo()`).
 
@@ -316,9 +316,9 @@ In namespace `osrm::storage`, `Storage::Run()` loads OSRM files: `PopulateLayout
     - `m_via_geometry_list`: maneuver `EdgeID` to source segment (via geometry) `GeometryID`;
     - `m_geometry_indices`: compressed geometry `EdgeID` into index of its first `NodeID`, including the one-past-last index;
     - `m_geometry_node_list`: `NodeID` comprising a compressed geometry, pooled sequential in `GeometryID::id` / `EdgeID`;
-    - `m_geometry_fwd_weight_list`, `m_geometry_rev_weight_list`: forward / reverse `EdgeWeight` per segment;
+    - `m_geometry_fwd_weight_list`, `m_geometry_rev_weight_list`: forward / reverse `EdgeWeight` (in deci-seconds) per segment;
 1. Edge-expanded graph
-    - `m_static_rtree`: `SharedRTree` of .ebg nodes built on-top of OSM coordinates, a `StaticRTree` with edge data type `RTreeLeaf = extractor::EdgeBasedNode` and coordinate list from shared memory;
+    - `m_static_rtree`: `SharedRTree` of .ebg nodes built on-top of OSM coordinates, which is a `StaticRTree` with edge data type `RTreeLeaf = extractor::EdgeBasedNode` and coordinate list from shared memory;
     - `m_geospatial_query`: `SharedGeospatialQuery` for edge and nearest phantom node search, `using SharedGeospatialQuery = GeospatialQuery<SharedRTree, BaseDataFacade>`;
 1. Contraction hierarchy:
     - `m_is_core_node`: `NodeID` to bool;
@@ -656,23 +656,13 @@ Try the most basic feature `/features/testbot/basic.feature`.
 
 TPEP trips **map matching** on EPSG:3395 (Coordinate - EdgeBasedNode ID) ->
     `StaticRTree::Nearest()` for compressed geometry EdgeID, or directed compressed segment SegmentID (attribute trips equally in case of two-way traffic)
-Aggregate trip frequency per pair of EdgeBasedNode ->
-    frequency = trips / compressed segment length
+Aggregate trip intensity per pair of EdgeBasedNode ->
+    intensity = trips / compressed segment length
 **Visualize** OSRM directed compressed segments as thematic map on network: {Linear scale transaction plot}
     `.nodes` (I); `.geometry` (II); {.edge_segment_lookup (segment_length), .enw; (.edges, .ebg, .edge_penalties,)}
     GIS GUI or libraries:
         OPL -> OSM -> GeoJSON;
     osrm-frontend: `vector<EdgeWeight>` as `speed` (integer weight) returned by `Engine::Tile()`;
-
-{Bootstrap traffic speed into a segment-speed-file (OSMNodeID, speed in km/h)} ->
-    compute maximum likelihood estimate of duration table across EdgeBasedNode IDs; (use R)
-    compare with subsample of OSRM duration `Table()` computed from traffic speed estimates;
-Generate shortest path tree from each EdgeBasedNode (consider starting & ending at midpoint) ->
-    New interface for weighted all-to-all route distribution, `RouteDistribution(ebg, enw, edge_penalties, trip frequency matrix) -> vector<EdgeWeight>`:
-    Uni-directional Dijkstra search on non-contracted edge-expanded graph on compressed geometry (`.ebg`, `.enw`, `.edge_penalties`);
-    EdgeBasedNode weighted by trip frequency and `enw / length` gives taxi supply rate on the corresponding compressed edge.
-{Alternative routes are unnecessary if source and target nodes are close to each other and end result does not need high accuracy.}
-More visualizations {supply rate plot; plot of inferred demand rate; supply-demand diff/imbalance}
 
 Data processing pipeline:
 
@@ -680,7 +670,19 @@ Data processing pipeline:
     download OpenStreetMap extract;
     osmupdate + osmosis (polygon & tag filter) + osmium + (JOSM manual edit);
     osrm-extract + osrm-contract + osrm-datastore;
-    OSRM custom code (graphs in exchange format - OPL; map matching; tabular data with id);
+    OSRM custom code (graphs in exchange format - OPL; map matching; columnar data with id);
     osmium + ogr2ogr;
     QGIS (csv non-geometry layer, join table), GRASS, R mapping packages, osrm-frontend;
 ```
+
+<!-- Progress line -->
+
+{Bootstrap traffic speed into a segment-speed-file (OSMNodeID, speed in km/h)} ->
+    compute maximum likelihood estimate of duration table across EdgeBasedNode IDs; (use R)
+    compare with subsample of OSRM duration `Table()` computed from traffic speed estimates;
+Generate shortest path tree from each EdgeBasedNode (consider starting & ending at midpoint) ->
+    New interface for weighted all-to-all route distribution, `RouteDistribution(ebg, enw, edge_penalties, trip intensity matrix) -> vector<EdgeWeight>`:
+    Uni-directional Dijkstra search on non-contracted edge-expanded graph on compressed geometry (`.ebg`, `.enw`, `.edge_penalties`);
+    EdgeBasedNode weighted by trip intensity and `enw / length` gives taxi supply rate on the corresponding compressed edge.
+{Alternative routes are unnecessary if source and target nodes are close to each other and end result does not need high accuracy.}
+More visualizations {supply rate plot; plot of inferred demand rate; supply-demand diff/imbalance}

@@ -63,7 +63,19 @@ struct EdgeBasedNode
     unsigned short fwd_segment_position; // segment id in a compressed geometry
     TravelMode forward_travel_mode : 4;
     TravelMode backward_travel_mode : 4;
+
 };
+
+// by Ruda
+inline std::ostream& operator<<(std::ostream& out, const EdgeBasedNode& node) {
+    return out << node.u << '-' << node.v << ": " <<
+               "component " << node.component.id << " " <<
+               "geometry " << node.packed_geometry_id << " " <<
+               "forward segment " << node.fwd_segment_position << "; " <<
+               "forward SegmentID " << node.forward_segment_id << ", " <<
+               "reverse SegmentID " << node.reverse_segment_id;
+}
+
 }
 }
 

@@ -97,6 +97,12 @@ struct SegmentID
     std::uint32_t enabled : 1;
 };
 
+// by Ruda
+inline std::ostream& operator<<(std::ostream& stream, const SegmentID& inst)
+{
+    return stream << inst.id << ", " << ((inst.enabled) ? ("enabled") : ("disabled"));
+}
+
 /* We need to bit pack here because the index for the via_node
  * is given to us without knowing whether the geometry should
  * be read forward or in reverse. The extra field `forward`

@@ -78,52 +78,8 @@ using std::endl;
 //    return distribution;
 //}
 
-int main()
-{
-    // use shared memory
-    if (!DataWatchdog::TryConnect())
-        throw osrm::util::exception("No shared memory blocks found, have you ran osrm-datastore?");
-    auto watchdog = std::make_unique<DataWatchdog>();
-    BOOST_ASSERT(watchdog);
-
-    DataWatchdog::RegionsLock lock;
-    std::shared_ptr<BaseDataFacade> facade;
-    std::tie(lock, facade) = watchdog->GetDataFacade();
-    auto shared_facade = std::dynamic_pointer_cast<SharedMemoryDataFacade>(facade);
-
-    // OSRM graph statistics and representation;
-    shared_facade->PrintStatistics();
-//    shared_facade->PrintLocations();
-//    shared_facade->PrintCompressedGeometry();
-//    shared_facade->WriteCompressedGeometry();
-
-    // Map matching
-    std::ifstream location_file{"locations.csv"};
-    if (!location_file) throw osrm::util::exception("locations.csv not found!");
-    // discard header line
-    location_file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    // format: lng,lat
-    csv<int, int> lnglat_table(location_file, ',');
-    std::ofstream edge_file{"nearest_edge.csv"};
-    if (!edge_file) throw osrm::util::exception("nearest_edge.csv cannot be created!");
-
-    TIMER_START(matching);
-    auto fp_multiplier = 1E5;
-    edge_file << "lng,lat,edge" << endl;
-    for (auto row : lnglat_table) {
-        using std::get;
-        auto fp_lng = get<0>(row);
-        auto fp_lat = get<1>(row);
-        // matching to nearest compressed geometry EdgeID;
-        // 23th St between 6th & 7th Ave: (-73.99417, 40.74351)
-        auto edge = shared_facade->NearestEdge(fp_lng / fp_multiplier, fp_lat / fp_multiplier).packed_geometry_id;
-        edge_file << fp_lng << ',' << fp_lat << ',' << edge << endl;
-    }
-    TIMER_STOP(matching);
-    // 418 sec for 1.6M locations
-    cout << "Geometry matching: " << TIMER_SEC(matching) << " seconds" << endl;
-
-    cout << "m_query_graph: (.hsgr)" << endl;
+void PrintEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
+    cout << "Edge-expanded graph: (.hsgr, m_query_graph)" << endl;
     const auto N = shared_facade->GetNumberOfNodes();
     for (auto n = 0u; n < N; n++) {
         cout << '\t' << "Node " << n << ": ";
@@ -150,9 +106,64 @@ int main()
         }
         cout << endl;
     }
-    cout << "Number of shortcut edges in core network: " << counts << endl;
-    cout << facade->GetNumberOfNodes() << endl;
+    cout << '\t' << "Number of shortcut edges in core network: " << counts << endl;
+}
+
+void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
+    std::ifstream location_file{"locations.csv"};
+    if (!location_file) throw osrm::util::exception("locations.csv not found!");
+    // discard header line
+    location_file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    // format: lng,lat
+    csv<int, int> lnglat_table(location_file, ',');
+    std::ofstream edge_file{"nearest_edge.csv"};
+    if (!edge_file) throw osrm::util::exception("nearest_edge.csv cannot be created!");
+
+    TIMER_START(matching);
+    auto fp_multiplier = 1E5;
+    edge_file << "lng,lat,edge" << endl;
+    for (const auto& row : lnglat_table) {
+        using std::get;
+        auto fp_lng = get<0>(row);
+        auto fp_lat = get<1>(row);
+        // matching to nearest compressed geometry EdgeID;
+        // 23th St between 6th & 7th Ave: (-73.99417, 40.74351)
+        auto edge = shared_facade->NearestEdge(fp_lng / fp_multiplier, fp_lat / fp_multiplier).packed_geometry_id;
+        edge_file << fp_lng << ',' << fp_lat << ',' << edge << endl;
+    }
+    TIMER_STOP(matching);
+    // 418 sec for 1.6M locations
+    cout << "Geometry matching: " << TIMER_SEC(matching) << " seconds" << endl;
+}
+
+int main()
+{
+    // use shared memory
+    if (!DataWatchdog::TryConnect())
+        throw osrm::util::exception("No shared memory blocks found, have you ran osrm-datastore?");
+    auto watchdog = std::make_unique<DataWatchdog>();
+    BOOST_ASSERT(watchdog);
+
+    DataWatchdog::RegionsLock lock;
+    std::shared_ptr<BaseDataFacade> facade;
+    std::tie(lock, facade) = watchdog->GetDataFacade();
+    auto shared_facade = std::dynamic_pointer_cast<SharedMemoryDataFacade>(facade);
+
+    // OSRM graph statistics and representation;
+    shared_facade->PrintStatistics();
+    shared_facade->PrintNodeBasedGraph();
+    shared_facade->PrintCompressedGeometry();
+//    shared_facade->WriteCompressedGeometry();
+    PrintEdgeExpandedGraph(shared_facade);
+
+    shared_facade->PrintSharedRTree();
+    // shared_facade->m_static_rtree->PrintRTree()
+    // shared_facade->m_static_rtree->m_leaves[index].objects[segment_index]
+
+    // MapMatching(shared_facade);
 
 //    auto supply_rate = RouteDistribution(facade, trip_frequency);
+    cout << facade->GetNumberOfNodes() << endl;
+
     return EXIT_SUCCESS;
 }

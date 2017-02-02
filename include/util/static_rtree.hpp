@@ -163,6 +163,19 @@ class StaticRTree
     StaticRTree(const StaticRTree &) = delete;
     StaticRTree &operator=(const StaticRTree &) = delete;
 
+    // by Ruda
+    void PrintRTree() {
+        using std::cout;
+        using std::endl;
+        for (const auto& leaf : m_leaves) {
+            auto object_count = leaf.object_count;
+            cout << "Leaf has " << object_count << " objects in bbox " << leaf.minimum_bounding_rectangle << endl;
+            for (unsigned obj = 0; obj < object_count; obj++) {
+                cout << '\t' << leaf.objects[obj] << endl;
+            }
+        }
+    }
+
     template <typename CoordinateT>
     // Construct a packed Hilbert-R-Tree with Kamel-Faloutsos algorithm [1]
     explicit StaticRTree(const std::vector<EdgeDataT> &input_data_vector,
