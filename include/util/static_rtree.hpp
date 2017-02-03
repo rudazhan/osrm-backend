@@ -169,7 +169,7 @@ class StaticRTree
         using std::endl;
         for (const auto& leaf : m_leaves) {
             auto object_count = leaf.object_count;
-            cout << "Leaf has " << object_count << " objects in bbox " << leaf.minimum_bounding_rectangle << endl;
+            cout << "RTree leaf has " << object_count << " objects in bbox " << leaf.minimum_bounding_rectangle << endl;
             for (unsigned obj = 0; obj < object_count; obj++) {
                 cout << '\t' << leaf.objects[obj] << endl;
             }

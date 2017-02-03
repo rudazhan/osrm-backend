@@ -423,7 +423,7 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         using std::cout;
         using std::endl;
         cout << "Summary of the node-based graph:" << endl;
-        cout << '\t' << m_osmnodeid_list.size() << " locations (OSMNodeID, Coordinates): " << endl;
+        cout << '\t' << m_osmnodeid_list.size() << " locations (OSMNodeID, Coordinates);" << endl;
         BOOST_ASSERT_MSG(m_osmnodeid_list.size() == m_coordinate_list.size(), "Numbers of coordinates and OSMNodeID do not match!");
         std::set<EdgeID> geometries;
         for (auto e = 0u; e < m_via_geometry_list.size(); e++) {
@@ -462,7 +462,7 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         auto maneuvers = m_via_geometry_list.size();
         for (EdgeID eid = 0u; eid < maneuvers; eid++)
             geometries.insert(m_via_geometry_list.at(eid).id);
-        cout << "Compressed geometry: " << geometries.size() << endl;
+        cout << "Compressed geometry: " << endl;
         for (const auto& edge_id : geometries) {
             cout << '\t' << "Edge " << edge_id << ": ";
             for (const auto& node_id : GetUncompressedForwardGeometry(edge_id)) cout << node_id << " ";
@@ -503,6 +503,9 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         } else {
             throw osrm::util::exception("Failed to open " + out_file + " for writing." + SOURCE_REF);
         }
+    }
+    void WriteEdgeBasedNode() const {
+        //..."osrm-ebn.csv"s
     }
     osrm::extractor::EdgeBasedNode NearestEdge(double lng_, double lat_) const {
         osrm::util::FloatLongitude lng{lng_};

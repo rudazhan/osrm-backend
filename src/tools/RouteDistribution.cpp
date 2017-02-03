@@ -26,6 +26,9 @@ using BaseDataFacade = osrm::engine::datafacade::BaseDataFacade;
 using std::cout;
 using std::endl;
 
+template <typename Function>
+void repeat(std::size_t n, Function f) { while (n--) f(); }
+
 //std::vector<NodeID> RouteDistribution(const ContiguousInternalMemoryDataFacadeBase &facade, const double** &trip_frequency)
 //// consider add vector of aggregated trip duration
 //{
@@ -79,7 +82,7 @@ using std::endl;
 //}
 
 void PrintEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
-    cout << "Edge-expanded graph: (.hsgr, m_query_graph)" << endl;
+    cout << "Edge-expanded graph: (core network, hsgr, m_query_graph)" << endl;
     const auto N = shared_facade->GetNumberOfNodes();
     for (auto n = 0u; n < N; n++) {
         cout << '\t' << "Node " << n << ": ";
@@ -107,6 +110,34 @@ void PrintEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facad
         cout << endl;
     }
     cout << '\t' << "Number of shortcut edges in core network: " << counts << endl;
+}
+
+void WriteEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
+    using namespace std::string_literals;
+    auto out_file = "osrm-ebg.csv"s;
+    std::ofstream ebg{out_file, std::ios_base::trunc};
+    if (ebg) {
+        using std::endl;
+        const auto N = shared_facade->GetNumberOfNodes();
+        const auto E = shared_facade->GetNumberOfEdges();
+        std::vector<unsigned> sources;
+        for (auto n = 0u; n < N; n++) {
+            auto out_degree = shared_facade->GetAdjacentEdgeRange(n).size();
+            BOOST_ASSERT_MSG(out_degree == shared_facade->GetOutDegree(n), "EdgeRange size does not match out degree!");
+            repeat(out_degree, [&sources, n](){ sources.push_back(n); });
+        }
+        BOOST_ASSERT_MSG(sources.size() == E, "Sizes of edge sources and edge list do not match!");
+        ebg << "source,target,weight,via_geometry" << endl;
+        for (auto e = 0u; e < E; e++) {
+            auto edge_data = shared_facade->GetEdgeData(e);
+            if (edge_data.forward) {
+                BOOST_ASSERT_MSG(!edge_data.shortcut, "Has a shortcut edge in graph!");
+                ebg << sources[e] << ',' << shared_facade->GetTarget(e) << ',' << edge_data.weight << ',' << edge_data.id << endl;
+            }
+        }
+    } else {
+        throw osrm::util::exception("Failed to open " + out_file + " for writing." + SOURCE_REF);
+    }
 }
 
 void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
@@ -153,12 +184,15 @@ int main()
     shared_facade->PrintStatistics();
     shared_facade->PrintNodeBasedGraph();
     shared_facade->PrintCompressedGeometry();
-//    shared_facade->WriteCompressedGeometry();
     PrintEdgeExpandedGraph(shared_facade);
 
+    // shared_facade->WriteCompressedGeometry(); (NodeID, OSMNodeId, lng, lat), (Geometry EdgeID, NodeID...); from node-based graph and compressed geometry
+    // shared_facade->WriteEdgeBasedNode(); // (EBN NodeID, Geometry EdgeID, direction, weight); from RTree and compressed geometry
+        // shared_facade->WriteNodeWeight(); // (Geometry EdgeID, forward weight, reverse weight); from compressed geometry
+     WriteEdgeExpandedGraph(shared_facade); // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
+
+
     shared_facade->PrintSharedRTree();
-    // shared_facade->m_static_rtree->PrintRTree()
-    // shared_facade->m_static_rtree->m_leaves[index].objects[segment_index]
 
     // MapMatching(shared_facade);
 
