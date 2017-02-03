@@ -170,10 +170,16 @@ class StaticRTree
         for (const auto& leaf : m_leaves) {
             auto object_count = leaf.object_count;
             cout << "RTree leaf has " << object_count << " objects in bbox " << leaf.minimum_bounding_rectangle << endl;
-            for (unsigned obj = 0; obj < object_count; obj++) {
-                cout << '\t' << leaf.objects[obj] << endl;
-            }
+            for (unsigned obj = 0; obj < object_count; obj++) cout << '\t' << leaf.objects[obj] << endl;
         }
+    }
+    std::vector<EdgeDataT> TreeObjects() const {
+        std::vector<EdgeDataT> objs;
+        for (const auto& leaf : m_leaves) {
+            std::for_each(leaf.objects.begin(), leaf.objects.begin() + leaf.object_count,
+                          [&objs](const EdgeDataT& obj){ objs.push_back(obj); });
+        }
+        return objs;
     }
 
     template <typename CoordinateT>

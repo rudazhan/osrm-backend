@@ -150,10 +150,10 @@ Data types:
     - `InternalExtractorEdge`
     - `NodeBasedEdge` for segments extracted from OSM ways: `is_split` (bidirectional segment split into two directed edges); `forward`, `backward` (is enabled); `startpoint` (is an entry point (location of penalty) to the graph).
         - `NodeBasedEdgeWithOSM` adds source and target `OSMNodeID`.
-    - `EdgeBasedNode` for segments' identity in the compressed geometry and potential match of directed compressed segments: source and target locations `NodeID`, `name_id`; `component` (31-bit `id`, `is_tiny`), compressed geometry ID, position within the compressed segment `fwd_segment_position`; forward and reverse `SegmentID` (edge-based node NodeID, is enabled) and `TravelMode`.
+    - `EdgeBasedNode` for segments' identity in the compressed geometry and potential match of directed compressed segments: source and target locations `NodeID`, `name_id`; `component` (31-bit `id`, `is_tiny`), compressed geometry node ID, position within the compressed segment `fwd_segment_position`; forward and reverse `SegmentID` (edge-based node NodeID, is enabled) and `TravelMode`.
     - `EdgeBasedEdge`: edge `NodeID`; source and target node `NodeID`; 30-bit `EdgeWeight` (source compressed segment duration plus penalty); bool `forward`, `backward` (upward/downward graph ?).
 - Graph elements in `osrm::engine`:
-    - `PhantomNode`, a point matched on the compressed geometry: `location` and `input_location`; `component` (`id`, `is_tiny`), compressed geometry EdgeID, `fwd_segment_position` (index of component segment); forward and reverse `SegmentID`, weight, and offset, `TravelMode`; `name_id`.
+    - `PhantomNode`, a point matched on the compressed geometry: `location` and `input_location`; `component` (`id`, `is_tiny`), compressed geometry node ID, `fwd_segment_position` (index of component segment); forward and reverse `SegmentID`, weight, and offset, `TravelMode`; `name_id`.
         - `PhantomNodes`, a pair of `PhantomNode` for one segment: `source_phantom` and `target_phantom`.
     - `PathData`, maneuver info: the leading segment (`NameID`, `TravelMode`, `EdgeWeight`, `DatasourceID`) and turn (`LaneTupleIdPair`, via node `NodeID`, pre & post `TurnBearing`, `EntryClassID`, `TurnInstruction`);
 - Graph elements in `osrm::util`:
@@ -183,6 +183,16 @@ Data types:
     - shortest and alternative path length.
     - whether the source and target `PhantomNode` is traversed in the reverse direction of the underlying compressed segment, in the shortest and alternative paths.
 
+`CompressedEdgeContainer` for one-way compressed geometries:
+
+- `m_compressed_oneway_geometries`: one `OnewayEdgeBucket` (vector of `OnewayCompressedEdge`) for each one-way compressed edge, where trivial compressed edges contain only one segment (`OnewayCompressedEdge`);
+- `m_compressed_geometry_index`: compressed geometry node id to the first `m_compressed_geometry_nodes` index;
+- `m_compressed_geometry_nodes`: internal NodeID comprising a compressed geometry node, pooled in order of geometry id;
+- `m_compressed_geometry_fwd_weights`, `m_compressed_geometry_rev_weights`: forward and reverse weights of a segment comprising a compressed geometry node, aligned with its target node;
+- `m_forward_edge_id_to_zipped_index_map`, `m_reverse_edge_id_to_zipped_index_map`: one-way compressed edge EdgeID to zipped compressed geometry node id;
+- `m_edge_id_to_list_index_map`: one-way compressed edge EdgeID to its `OnewayEdgeBucket` index;
+- `m_free_list`: a vector available `OnewayEdgeBucket` indices in `m_edge_id_to_list_index_map`;
+
 ### Four Main Graphs
 
 1. **Node-based graph**: geographic representation (node = location; edge = segment); `.nodes`, `.osrm`, `.edges`;
@@ -198,16 +208,6 @@ Compress simple locations with two segments in total which are compatible (`Node
        <----------   <-----------      |     <----------
         reverse_e2    reverse_e1       |      reverse_e1
 ```
-
-`CompressedEdgeContainer` for one-way compressed geometries:
-
-- `m_compressed_oneway_geometries`: one `OnewayEdgeBucket` (vector of `OnewayCompressedEdge`) for each one-way compressed edge, where trivial compressed edges contain only one segment (`OnewayCompressedEdge`);
-- `m_compressed_geometry_index`: compressed geometry id to the first `m_compressed_geometry_nodes` index;
-- `m_compressed_geometry_nodes`: internal NodeID comprising a compressed geometry, pooled in order of geometry id;
-- `m_compressed_geometry_fwd_weights`, `m_compressed_geometry_rev_weights`: forward and reverse weights of a segment comprising a compressed geometry, aligned with its target node;
-- `m_forward_edge_id_to_zipped_index_map`, `m_reverse_edge_id_to_zipped_index_map`: one-way compressed edge EdgeID to zipped compressed geometry id;
-- `m_edge_id_to_list_index_map`: one-way compressed edge EdgeID to its `OnewayEdgeBucket` index;
-- `m_free_list`: a vector available `OnewayEdgeBucket` indices in `m_edge_id_to_list_index_map`;
 
 `incoming_edge = m_node_based_graph->FindEdge(node_along_road_entering, node_at_center_of_intersection)` is a compressed segment with segments `m_compressed_edge_container.GetBucketReference(incoming_edge)`
 
@@ -253,7 +253,7 @@ Part two builds edge-expanded graph:
         1. `RenumberEdges()` re-generates edge ID of directed compressed segments in `NodeBasedDynamicGraph`, updates `EdgeWeight`, and returns the edge count;
         1. `GenerateEdgeExpandedNodes()` builds `edge_based_node_list`;
         1. `GenerateEdgeExpandedEdges()` builds `edge_based_edge_list` bases on compressed geometry;
-            - `.osrm.edges`, segment geometry ID and guidance: a vector of `OriginalEdgeData` (`GeometryID `of via geometry; `NameID`, `TravelMode`, `EntryClassID`, `LaneDataID`, `TurnInstruction`, pre/post `TurnBearing`);
+            - `.osrm.edges`, segment geometry ID and guidance: a vector of `OriginalEdgeData` (of compressed geometry node; `NameID`, `TravelMode`, `EntryClassID`, `LaneDataID`, `TurnInstruction`, pre/post `TurnBearing`);
             - `.osrm.edge_segment_lookup` (if `--generate-edge-lookup`), lookup file between maneuver EdgeID and the geometry of its source compressed segment: one `SegmentHeaderBlock` (index, first_node.node_id) plus multiple `SegmentBlock` (to.node_id, segment_length, edge weight);
             - `.osrm.edge_penalties` (if `--generate-edge-lookup`), lookup file for penalty and component `OSMNodeID` of the restriction (implicit EdgeID): `PenaltyBlock` (fixed_penalty; NodeID of from, via, and to nodes);
             - `.osrm.tld`, turn lane data: size and elements of a vector of `LaneTupleIdPair`: `LaneTuple`, `LaneDescriptionID`;
@@ -313,9 +313,9 @@ In namespace `osrm::storage`, `Storage::Run()` loads OSRM files: `PopulateLayout
     - `m_name_table`: `RangeTable`; adjacent ranges;
     - `m_names_char_list`: strings of edge name;
 1. Compressed geometry:
-    - `m_via_geometry_list`: maneuver `EdgeID` to source segment (via geometry) `GeometryID`;
-    - `m_geometry_indices`: compressed geometry `EdgeID` into index of its first `NodeID`, including the one-past-last index;
-    - `m_geometry_node_list`: `NodeID` comprising a compressed geometry, pooled sequential in `GeometryID::id` / `EdgeID`;
+    - `m_via_geometry_list`: maneuver `EdgeID` to source compressed geometry node `GeometryID`;
+    - `m_geometry_indices`: compressed geometry node `EdgeID` into index of its first `NodeID`, including the one-past-last index;
+    - `m_geometry_node_list`: `NodeID` comprising a compressed geometry node, pooled sequential in `GeometryID::id` / `EdgeID`;
     - `m_geometry_fwd_weight_list`, `m_geometry_rev_weight_list`: forward / reverse `EdgeWeight` (in deci-seconds) per segment;
 1. Edge-expanded graph
     - `m_static_rtree`: `SharedRTree` of .ebg nodes built on-top of OSM coordinates, which is a `StaticRTree` with edge data type `RTreeLeaf = extractor::EdgeBasedNode` and coordinate list from shared memory;
@@ -655,7 +655,7 @@ Try the most basic feature `/features/testbot/basic.feature`.
 ## Exploiting OSRM compressed graph
 
 TPEP trips **map matching** on EPSG:3395 (Coordinate - EdgeBasedNode ID) ->
-    `StaticRTree::Nearest()` for compressed geometry EdgeID, or directed compressed segment SegmentID (attribute trips equally in case of two-way traffic)
+    `StaticRTree::Nearest()` for compressed geometry node ID, or directed compressed segment SegmentID (attribute trips equally in case of two-way traffic)
 Aggregate trip intensity per pair of EdgeBasedNode ->
     intensity = trips / compressed segment length
 **Visualize** OSRM directed compressed segments as thematic map on network: {Linear scale transaction plot}

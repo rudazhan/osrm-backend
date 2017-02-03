@@ -185,14 +185,14 @@ int main()
     shared_facade->PrintNodeBasedGraph();
     shared_facade->PrintCompressedGeometry();
     PrintEdgeExpandedGraph(shared_facade);
-
-    // shared_facade->WriteCompressedGeometry(); (NodeID, OSMNodeId, lng, lat), (Geometry EdgeID, NodeID...); from node-based graph and compressed geometry
-    // shared_facade->WriteEdgeBasedNode(); // (EBN NodeID, Geometry EdgeID, direction, weight); from RTree and compressed geometry
-        // shared_facade->WriteNodeWeight(); // (Geometry EdgeID, forward weight, reverse weight); from compressed geometry
-     WriteEdgeExpandedGraph(shared_facade); // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
-
-
     shared_facade->PrintSharedRTree();
+
+    // (NodeID, OSMNodeId, lng, lat), (Geometry EdgeID, NodeID...); from node-based graph and compressed geometry
+    shared_facade->WriteCompressedGeometry();
+    // (EBN NodeID, Geometry EdgeID, direction, weight); from RTree and compressed geometry
+    shared_facade->WriteEdgeBasedNode();
+    // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
+    WriteEdgeExpandedGraph(shared_facade);
 
     // MapMatching(shared_facade);
 

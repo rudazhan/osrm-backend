@@ -36,6 +36,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+// by Ruda
+#include <numeric>
 
 namespace osrm
 {
@@ -426,12 +428,7 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         cout << '\t' << m_osmnodeid_list.size() << " locations (OSMNodeID, Coordinates);" << endl;
         BOOST_ASSERT_MSG(m_osmnodeid_list.size() == m_coordinate_list.size(), "Numbers of coordinates and OSMNodeID do not match!");
         std::set<EdgeID> geometries;
-        for (auto e = 0u; e < m_via_geometry_list.size(); e++) {
-            auto gid = m_via_geometry_list.at(e);
-//            print the via geometry:
-//            cout << '\t' << e << ": " << (gid.forward ? "forward" : "reverse") << " geometry " << gid.id << endl;
-            geometries.insert(gid.id);
-        }
+        for (const auto& compressed_segment : m_via_geometry_list) geometries.insert(compressed_segment.id);
         cout << "Summary of the compressed geometry:" << endl;
         cout << '\t' << m_geometry_indices.size() - geometries.size() << " strongly connected components;" << endl;
         cout << '\t' << geometries.size() << " compressed geometries;" << endl;
@@ -459,9 +456,7 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         using std::cout;
         using std::endl;
         std::set<EdgeID> geometries;
-        auto maneuvers = m_via_geometry_list.size();
-        for (EdgeID eid = 0u; eid < maneuvers; eid++)
-            geometries.insert(m_via_geometry_list.at(eid).id);
+        for (const auto& compressed_segment : m_via_geometry_list) geometries.insert(compressed_segment.id);
         cout << "Compressed geometry: " << endl;
         for (const auto& edge_id : geometries) {
             cout << '\t' << "Edge " << edge_id << ": ";
@@ -488,9 +483,7 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
                 opl << " y" << toFloating(coordinate.lat) << endl;
             }
             std::set<EdgeID> geometries;
-            auto maneuvers = m_via_geometry_list.size();
-            for (EdgeID eid = 0u; eid < maneuvers; eid++)
-                geometries.insert(m_via_geometry_list.at(eid).id);
+            for (const auto& compressed_segment : m_via_geometry_list) geometries.insert(compressed_segment.id);
             for (const auto& edge_id : geometries) {
                 opl << 'w' << edge_id << " N";
                 for (const auto& node_id : GetUncompressedForwardGeometry(edge_id)) {
@@ -505,7 +498,36 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         }
     }
     void WriteEdgeBasedNode() const {
-        //..."osrm-ebn.csv"s
+        using namespace std::string_literals;
+        auto out_file = "osrm-ebn.csv"s;
+        std::ofstream ebn_fs{out_file, std::ios_base::trunc};
+        if (ebn_fs) {
+            using std::cout;
+            using std::endl;
+            std::map<NodeID, GeometryID> node_geometry_map;
+            for (const auto& ebn : m_static_rtree->TreeObjects()) {
+                if (ebn.forward_segment_id.enabled) {
+                    if (node_geometry_map.find(ebn.forward_segment_id.id) == node_geometry_map.end()) {
+                        node_geometry_map[ebn.forward_segment_id.id] = GeometryID(ebn.packed_geometry_id, true);
+                    }
+                }
+                if (ebn.reverse_segment_id.enabled) {
+                    if (node_geometry_map.find(ebn.reverse_segment_id.id) == node_geometry_map.end()) {
+                        node_geometry_map[ebn.reverse_segment_id.id] = GeometryID(ebn.packed_geometry_id, false);
+                    }
+                }
+            }
+            ebn_fs << "ebn,geometry,forward,weight" << endl;
+            for (const auto& ebn : node_geometry_map) {
+                ebn_fs << ebn.first << ',' << ebn.second.id << ',' << ebn.second.forward;
+                auto weights = (ebn.second.forward ?
+                                GetUncompressedForwardWeights(ebn.second.id) :
+                                GetUncompressedReverseWeights(ebn.second.id));
+                ebn_fs << ',' << std::accumulate(weights.begin(), weights.end(), 0) << endl;
+            }
+        } else {
+            throw osrm::util::exception("Failed to open " + out_file + " for writing." + SOURCE_REF);
+        }
     }
     osrm::extractor::EdgeBasedNode NearestEdge(double lng_, double lat_) const {
         osrm::util::FloatLongitude lng{lng_};
