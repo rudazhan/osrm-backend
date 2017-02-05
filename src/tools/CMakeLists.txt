@@ -13,3 +13,6 @@ set(EXTERNAL_LIBRARIES
 
 add_executable(route-distribution RouteDistribution.cpp $<TARGET_OBJECTS:UTIL> ../../include/util/csv_reader.hpp)
 target_link_libraries(route-distribution osrm ${EXTERNAL_LIBRARIES})
+
+add_executable(osrm-spf ShortestPathForest.cpp $<TARGET_OBJECTS:UTIL> ../../include/util/csv_reader.hpp)
+target_link_libraries(osrm-spf osrm ${EXTERNAL_LIBRARIES})

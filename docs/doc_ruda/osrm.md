@@ -127,7 +127,7 @@ Terminology:
     - level: an individual graph in the CH with a distinct number of nodes, indexed from 0 (the original graph) and up.
     - core network: the highest level built for the CH.
     - core node: nodes in the core network, i.e. nodes that remain uncontracted at the highest level of the CH.
-    - unpacking: expand a path on the core network potentially with shortcut edges (sequence of EdgeBasedNode `NodeID`) down to a path on the original edge-expanded graph (sequence of directed compressed segment `NodeID`).
+    - unpacking: expand a path on the core network potentially with shortcut edges (sequence of edge-based node `NodeID`) down to a path on the original edge-expanded graph (sequence of directed compressed segment `NodeID`).
 
 Notation:
 
@@ -171,10 +171,11 @@ Data types:
         - `m_leaves`: a vector of `LeafNode` (array of `EdgeDataT` objects; number of objects, minimum bounding `Rectangle`);
         - `m_leaves_region`: leaf node file mapped to memory;
         - `m_coordinate_list`: a vector of `Coordinate`;
-- Heap in `osrm::util`: `BinaryHeap<>`
-    - `heap` is a vector of `HeapElement` (`Key`, `Weight`)
-    - `inserted_nodes` is a vector of `HeapNode` (`NodeID`, `Key`, `Weight`, `Data`)
-    - `node_index` is an index (default to vector) from `NodeID` to `Key`.
+- Heap
+    - In `osrm::util`: `BinaryHeap<>`, a min-heap.
+        - `heap` is a vector of `HeapElement`: `Key` index, `Weight`;
+        - `inserted_nodes` is a vector of `HeapNode`: `NodeID`, `Key`, `Weight`, `Data` (e.g. parent node);
+        - `node_index` is an index (default to vector) from `NodeID` to `Key` index;
     - In `osrm::engine::SearchEngineData`: `QueryHeap` is a `BinaryHeap` with `Key = NodeID`, `Weight = int`, `Data = NodeID` (parent), and uses `std::unordered_map` for `node_index`;
     - forward/reverse heap is a `QueryHeap` of segment IDs for forward/backward search; one for `.ebg`, one for `.hsgr`.
 - Query result in `osrm::engine`: `InternalRouteResult` :
@@ -420,7 +421,7 @@ Input:
 
 Default profiles are available in source repo under `/profiles`, some parts of which you may want to customize:
 (Default `car.lua` weights: duration along 100m primary road ~6.9s; traffic light 2s, u-turn 20s, 90° right-turn ~2.1s, 90° left-turn ~5.4s, 180° turns 7.5s)
-(`testbot.lua` weights: duration along 100m primary road equals 10s; traffic light 7s, u-turn 20s)
+(`testbot.lua` weights: duration along 100m primary road equals 10s; traffic light 7s, u-turn 20s, no turn penalty)
 
 - variables:
     - speed reduction factors: `speed_reduction` (over speed limits), `side_road_speed_multiplier` (for "side_road=yes,rotary");
@@ -654,9 +655,9 @@ Try the most basic feature `/features/testbot/basic.feature`.
 
 ## Exploiting OSRM compressed graph
 
-TPEP trips **map matching** on EPSG:3395 (Coordinate - EdgeBasedNode ID) ->
+TPEP trips **map matching** on EPSG:3395 (Coordinate - edge-based node ID) ->
     `StaticRTree::Nearest()` for compressed geometry node ID, or directed compressed segment SegmentID (attribute trips equally in case of two-way traffic)
-Aggregate trip intensity per pair of EdgeBasedNode ->
+Aggregate trip intensity per pair of edge-based node ->
     intensity = trips / compressed segment length
 **Visualize** OSRM directed compressed segments as thematic map on network: {Linear scale transaction plot}
     `.nodes` (I); `.geometry` (II); {.edge_segment_lookup (segment_length), .enw; (.edges, .ebg, .edge_penalties,)}
@@ -678,11 +679,11 @@ Data processing pipeline:
 <!-- Progress line -->
 
 {Bootstrap traffic speed into a segment-speed-file (OSMNodeID, speed in km/h)} ->
-    compute maximum likelihood estimate of duration table across EdgeBasedNode IDs; (use R)
+    compute maximum likelihood estimate of duration table across edge-based node IDs; (use R)
     compare with subsample of OSRM duration `Table()` computed from traffic speed estimates;
-Generate shortest path tree from each EdgeBasedNode (consider starting & ending at midpoint) ->
-    New interface for weighted all-to-all route distribution, `RouteDistribution(ebg, enw, edge_penalties, trip intensity matrix) -> vector<EdgeWeight>`:
+Generate shortest path tree from each edge-based node (starting & ending at midpoint) ->
+    New interface for trip frequency weighted all-to-all route distribution, `RouteDistribution(ebg, enw, edge_penalties, trip intensity matrix) -> vector<EdgeWeight>`:
     Uni-directional Dijkstra search on non-contracted edge-expanded graph on compressed geometry (`.ebg`, `.enw`, `.edge_penalties`);
-    EdgeBasedNode weighted by trip intensity and `enw / length` gives taxi supply rate on the corresponding compressed edge.
+    edge-based node weighted by trip intensity and `enw / length` gives taxi supply rate on the corresponding compressed edge.
 {Alternative routes are unnecessary if source and target nodes are close to each other and end result does not need high accuracy.}
 More visualizations {supply rate plot; plot of inferred demand rate; supply-demand diff/imbalance}

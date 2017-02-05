@@ -18,68 +18,35 @@
 #include <cstdlib>
 #include <iostream>
 
-using QueryHeap = osrm::engine::SearchEngineData::QueryHeap;
 using DataWatchdog = osrm::engine::DataWatchdog;
-using SharedMemoryDataFacade = osrm::engine::datafacade::SharedMemoryDataFacade;
 using BaseDataFacade = osrm::engine::datafacade::BaseDataFacade;
+using SharedMemoryDataFacade = osrm::engine::datafacade::SharedMemoryDataFacade;
+
+using FileName = std::string;
+using Weight = std::uint32_t;
+static const Weight INVALID_WEIGHT = std::numeric_limits<Weight>::max();
+using StaticGraph = osrm::util::StaticGraph<Weight>;
+//using QueryHeap = osrm::engine::SearchEngineData::QueryHeap;
+struct TreeNode {
+    NodeID parent;
+    TreeNode(NodeID p) : parent(p) {}
+};
+using BinaryHeap = osrm::util::BinaryHeap<NodeID, NodeID, Weight, TreeNode, osrm::util::UnorderedMapStorage<NodeID, unsigned >>;
+//struct HeapNode {
+//    NodeID node;
+//    Weight weight;
+//    HeapNode(NodeID n, Weight w) : node(n), weight(w) {}
+//};
+//struct node_inferior  {
+//    bool operator()(const Weight& w1, const Weight& w2) const { return w1 > w2; }
+//};
 
 using std::cout;
 using std::endl;
+using namespace std::string_literals;
 
 template <typename Function>
 void repeat(std::size_t n, Function f) { while (n--) f(); }
-
-//std::vector<NodeID> RouteDistribution(const ContiguousInternalMemoryDataFacadeBase &facade, const double** &trip_frequency)
-//// consider add vector of aggregated trip duration
-//{
-//    QueryHeap query_heap;
-//    std::vector<NodeID> distribution;
-//    auto weight = INVALID_EDGE_WEIGHT;
-//
-//    // get all edgeBasedNode (core nodes) from facade
-//
-//    // for each source edgeBasedNode, do forward complete Dijkstra search
-//
-//    // set up query heap (forward_segment_id, reverse_segment_id)
-//    // prevents forcing of loops when offsets are correct.
-//    constexpr bool DO_NOT_FORCE_LOOPS = false;
-//    if (source_phantom.forward_segment_id.enabled)
-//    {
-//        query_heap.Insert(source_phantom.forward_segment_id.id,
-//                            -source_phantom.GetForwardWeightPlusOffset(),
-//                            source_phantom.forward_segment_id.id);
-//    }
-//    if (source_phantom.reverse_segment_id.enabled)
-//    {
-//        query_heap.Insert(source_phantom.reverse_segment_id.id,
-//                            -source_phantom.GetReverseWeightPlusOffset(),
-//                            source_phantom.reverse_segment_id.id);
-//    }
-//
-//    // Search(facade, query_heap, DO_NOT_FORCE_LOOPS; weight, route)
-//    while (!query_heap.Empty())
-//    {
-//        // RoutingStep(facade, query_heap);
-//        const NodeID node = query_heap.DeleteMin();
-//        if (to_weight < query_heap.GetKey(to))
-//        {
-//            query_heap.GetData(to).parent = node;
-//            query_heap.DecreaseKey(to, to_weight);
-//        }
-//
-//    }
-//
-//    // Retrieve path from heap (search_heap, target_node_id) -> path
-//    std::vector<NodeID> route;
-//    for (auto node = target_node_id; node != search_heap.GetData(node).parent; )
-//    {
-//        node = search_heap.GetData(node).parent;
-//        path.emplace_back(node);
-//    }
-//
-//    // weight with trip frequency
-//    return distribution;
-//}
 
 void PrintEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
     cout << "Edge-expanded graph: (core network, hsgr, m_query_graph)" << endl;
@@ -113,11 +80,9 @@ void PrintEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facad
 }
 
 void WriteEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
-    using namespace std::string_literals;
     auto out_file = "osrm-ebg.csv"s;
     std::ofstream ebg{out_file, std::ios_base::trunc};
     if (ebg) {
-        using std::endl;
         const auto N = shared_facade->GetNumberOfNodes();
         const auto E = shared_facade->GetNumberOfEdges();
         std::vector<unsigned> sources;
@@ -140,6 +105,24 @@ void WriteEdgeExpandedGraph(std::shared_ptr<SharedMemoryDataFacade> shared_facad
     }
 }
 
+StaticGraph ReadEdgeExpandedGraph(FileName ebg_filename) {
+    std::ifstream ebg_file{ebg_filename};
+    if (!ebg_file) throw osrm::util::exception("locations.csv not found!");
+    // discard header line
+    ebg_file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    // format: source,target,weight,via_geometry
+    csv<NodeID, NodeID, Weight, NodeID> ebg_table(ebg_file, ',');
+    std::vector<StaticGraph::InputEdge> ebg;
+    for (const auto& row : ebg_table) {
+        auto source = std::get<0>(row);
+        auto target = std::get<1>(row);
+        auto weight = std::get<2>(row);
+        ebg.push_back(StaticGraph::InputEdge(source, target, weight));
+    }
+    auto ebns = ebg.back().source + 1;
+    return StaticGraph(ebns, ebg);
+}
+
 void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
     std::ifstream location_file{"locations.csv"};
     if (!location_file) throw osrm::util::exception("locations.csv not found!");
@@ -154,9 +137,8 @@ void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
     auto fp_multiplier = 1E5;
     edge_file << "lng,lat,edge" << endl;
     for (const auto& row : lnglat_table) {
-        using std::get;
-        auto fp_lng = get<0>(row);
-        auto fp_lat = get<1>(row);
+        auto fp_lng = std::get<0>(row);
+        auto fp_lat = std::get<1>(row);
         // matching to nearest compressed geometry EdgeID;
         // 23th St between 6th & 7th Ave: (-73.99417, 40.74351)
         auto edge = shared_facade->NearestEdge(fp_lng / fp_multiplier, fp_lat / fp_multiplier).packed_geometry_id;
@@ -166,6 +148,26 @@ void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
     // 418 sec for 1.6M locations
     cout << "Geometry matching: " << TIMER_SEC(matching) << " seconds" << endl;
 }
+
+//std::vector<std::pair<NodeID, Weight>> OutEdges(std::shared_ptr<SharedMemoryDataFacade> shared_facade, NodeID min_node) {
+//    std::vector<std::pair<NodeID, Weight>> out_edges;
+//    auto last_edge = shared_facade->GetAdjacentEdgeRange(min_node).back();
+//    for (auto e = shared_facade->GetAdjacentEdgeRange(min_node).front(); e <= last_edge; e++) {
+//        if (shared_facade->GetEdgeData(e).forward) {
+//            out_edges.push_back(std::make_pair(shared_facade->GetTarget(e), static_cast<Weight>(shared_facade->GetEdgeData(e).weight)));
+//        }
+//    }
+//    return out_edges;
+//}
+
+// trip frequency weighted all-to-all route distribution
+// consider add vector of aggregated trip duration
+//std::vector<Weight> RouteDistribution(std::shared_ptr<SharedMemoryDataFacade> shared_facade, FileName ebn, FileName ebg, FileName od_matrix) {
+//    // read in those graphs and trip frequency matrix.
+//    // or rather...
+//    std::vector<NodeID> distribution;
+//    return distribution;
+//}
 
 int main()
 {
@@ -182,10 +184,10 @@ int main()
 
     // OSRM graph statistics and representation;
     shared_facade->PrintStatistics();
-    shared_facade->PrintNodeBasedGraph();
-    shared_facade->PrintCompressedGeometry();
-    PrintEdgeExpandedGraph(shared_facade);
-    shared_facade->PrintSharedRTree();
+//    shared_facade->PrintNodeBasedGraph();
+//    shared_facade->PrintCompressedGeometry();
+//    PrintEdgeExpandedGraph(shared_facade);
+//    shared_facade->PrintSharedRTree();
 
     // (NodeID, OSMNodeId, lng, lat), (Geometry EdgeID, NodeID...); from node-based graph and compressed geometry
     shared_facade->WriteCompressedGeometry();
@@ -194,6 +196,8 @@ int main()
     // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
     WriteEdgeExpandedGraph(shared_facade);
 
+    auto ebg = ReadEdgeExpandedGraph("osrm-ebg.csv"s);
+    WriteShortestPathTrees(ebg);
     // MapMatching(shared_facade);
 
 //    auto supply_rate = RouteDistribution(facade, trip_frequency);

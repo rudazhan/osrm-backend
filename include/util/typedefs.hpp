@@ -83,6 +83,8 @@ static const NameID INVALID_NAMEID = std::numeric_limits<NameID>::max();
 static const NameID EMPTY_NAMEID = 0;
 static const unsigned INVALID_COMPONENTID = 0;
 static const EdgeWeight INVALID_EDGE_WEIGHT = std::numeric_limits<EdgeWeight>::max();
+//by Ruda
+static const NodeID INVALID_NODEID = std::numeric_limits<NodeID>::max();
 
 using DatasourceID = std::uint8_t;
 
