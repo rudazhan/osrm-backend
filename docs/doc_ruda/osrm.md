@@ -337,8 +337,8 @@ In namespace `osrm::storage`, `Storage::Run()` loads OSRM files: `PopulateLayout
 Routing algorithms are implemented as functors in namespace `osrm::engine::routing_algorithms`:
 
 1. `BasicRoutingInterface`: class template with common routing functions.
+    - `Search()`, `SearchWithCore()` use forward and reverse QueryHeap in two-target/bidirectional Dijkstra `RoutingStep()`, and use `RetrievePackedPathFromHeap()` to get path on CH graph.
 1. `DirectShortestPathRouting`: Direct shortest path algorithm does not accept via locations.
-    - `Search()`, `SearchWithCore()` uses forward and reverse QueryHeap in two-target/bidirectional Dijkstra routing steps; uses `RetrievePackedPathFromHeap()` to get path on CH graph.
 1. `ShortestPathRouting`: This general shortest path algorithm always computes two queries for each leg (source forward/reverse -> target forward/reverse), allowing U-turn at the target phantom node.
     - This is only necessary in case of via locations where the directions of the next start node is constrained by the previous route (source forward/reverse -> target forward; source forward/reverse -> target reverse)
 1. `AlternativeRouting`: Namespace scope parameters are set such that alternative are at most 15% longer (`VIAPATH_EPSILON`) and shares at most 75% with the shortest (`VIAPATH_GAMMA`); Not sure what `VIAPATH_ALPHA` is.

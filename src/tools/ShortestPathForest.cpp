@@ -83,11 +83,17 @@ void WriteShortestPathTrees(const StaticGraph& ebg, NodeID begin, NodeID end) {
             for (auto n = 0u; n < ebns; n++) heap.Insert(n, INVALID_WEIGHT, INVALID_NODEID);
             heap.DecreaseKey(source, 0u);
             while (!heap.Empty()) {
-                const auto min_node = heap.DeleteMin();
-                auto min_weight = heap.GetKey(min_node);
+                // Routing Step
+                const auto min_node = heap.Min();
+                auto min_weight = heap.MinKey();
+                heap.DeleteMin();
+                // No difference but counterintuitive, used in BasicRoutingInterface::RoutingStep().
+//                const auto min_node = heap.DeleteMin();
+//                auto min_weight = heap.GetKey(min_node);
                 auto end_edge = ebg.EndEdges(min_node);
                 for(auto edge = ebg.BeginEdges(min_node); edge < end_edge; edge++) {
                     auto to_node = ebg.GetTarget(edge);
+                    if (heap.WasRemoved(to_node)) continue;
                     auto edge_weight = ebg.GetEdgeData(edge);
                     if (min_weight + edge_weight < heap.GetKey(to_node)) {
                         heap.DecreaseKey(to_node, min_weight + edge_weight);
