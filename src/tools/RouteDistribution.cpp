@@ -145,7 +145,7 @@ void MapMatching(std::shared_ptr<SharedMemoryDataFacade> shared_facade) {
         edge_file << fp_lng << ',' << fp_lat << ',' << edge << endl;
     }
     TIMER_STOP(matching);
-    // 418 sec for 1.6M locations
+    // 375,400 sec for 1.57M locations
     cout << "Geometry matching: " << TIMER_SEC(matching) << " seconds" << endl;
 }
 
@@ -196,12 +196,11 @@ int main()
     // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
     WriteEdgeExpandedGraph(shared_facade);
 
-    auto ebg = ReadEdgeExpandedGraph("osrm-ebg.csv"s);
-    WriteShortestPathTrees(ebg);
-    // MapMatching(shared_facade);
+    MapMatching(shared_facade);
 
-//    auto supply_rate = RouteDistribution(facade, trip_frequency);
-    cout << facade->GetNumberOfNodes() << endl;
+//    auto ebg = ReadEdgeExpandedGraph("osrm-ebg.csv"s);
+//    auto supply_rate = RouteDistribution(ebg, od_table);
+    cout << "Dummy code :P" << endl;
 
     return EXIT_SUCCESS;
 }

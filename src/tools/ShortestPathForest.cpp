@@ -112,6 +112,14 @@ void WriteShortestPathTrees(const StaticGraph& ebg, NodeID begin, NodeID end) {
     }
 }
 
+// trip frequency weighted all-to-all route distribution
+// consider add vector of aggregated trip duration
+std::vector<Weight> RouteDistribution(const StaticGraph& ebg, FileName od_table) {
+    // read trip frequency matrix
+    std::vector<NodeID> distribution;
+    return distribution;
+}
+
 NodeID parse_id(const char* str) { return static_cast<NodeID>(std::strtoul(str, nullptr, 10)); }
 
 // run in 5min40s with 8 threads
