@@ -196,7 +196,7 @@ int main()
     // (source EBN NodeID, target EBN NodeID, weight, ViaGeometryID); from m_query_graph forward edges/maneuvers
     WriteEdgeExpandedGraph(shared_facade);
 
-    MapMatching(shared_facade);
+//    MapMatching(shared_facade);
 
 //    auto ebg = ReadEdgeExpandedGraph("osrm-ebg.csv"s);
 //    auto supply_rate = RouteDistribution(ebg, od_table);

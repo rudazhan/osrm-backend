@@ -42,7 +42,7 @@ StaticGraph ReadEdgeExpandedGraph(FileName ebg_filename) {
 struct ShortestPathTree {
     std::vector<NodeID> parent;
     ShortestPathTree() : parent() {}
-    ShortestPathTree(std::size_t size) : parent(std::vector<NodeID>(size)) {}
+    ShortestPathTree(std::size_t size, NodeID init) : parent(std::vector<NodeID>(size, init)) {}
     std::vector<NodeID> reverse_path_to(NodeID target) {
         std::vector<NodeID> reverse_path{target};
         auto node = target;
@@ -80,6 +80,8 @@ void WriteShortestPathTrees(const StaticGraph& ebg, NodeID begin, NodeID end) {
             cout << '\t' << source << endl;
             // for each source ebn, do forward complete Dijkstra search
             BinaryHeap heap(ebns);
+            ShortestPathTree spt(ebns, INVALID_NODEID);
+            // not actually using the data slot of BinaryHeap node array;
             for (auto n = 0u; n < ebns; n++) heap.Insert(n, INVALID_WEIGHT, INVALID_NODEID);
             heap.DecreaseKey(source, 0u);
             while (!heap.Empty()) {
@@ -97,17 +99,20 @@ void WriteShortestPathTrees(const StaticGraph& ebg, NodeID begin, NodeID end) {
                     auto edge_weight = ebg.GetEdgeData(edge);
                     if (min_weight + edge_weight < heap.GetKey(to_node)) {
                         heap.DecreaseKey(to_node, min_weight + edge_weight);
-                        heap.GetData(to_node).parent = min_node;
+//                        heap.GetData(to_node).parent = min_node;
+                        spt.parent[to_node] = min_node;
                     }
                 }
             }
-//            ShortestPathTree spt(ebns);
 //            for (auto n = 0u; n < ebns; n++) spt.parent[n] = heap.GetData(n).parent;
 //            spf.plant(spt, source);
 //            for (auto n = 0u; n < ebns; n++) spt_fs << '\t' << (spt.parent[n] == INVALID_NODEID ? n : spt.parent.at(n));
             for (auto n = 0u; n < ebns; n++) {
-                auto parent_n = heap.GetData(n).parent;
+//                auto parent_n = heap.GetData(n).parent;
+                auto parent_n = spt.parent[n];
                 spt_fs << '\t' << (parent_n == INVALID_NODEID ? n : parent_n);
+                // not safe when querying path to unreachable nodes.
+//                spt_fs << '\t' << (n == source ? source : parent_n);
             }
             spt_fs << endl;
         }
@@ -120,11 +125,11 @@ void WriteShortestPathTrees(const StaticGraph& ebg, NodeID begin, NodeID end) {
 
 // trip frequency weighted all-to-all route distribution
 // consider add vector of aggregated trip duration
-std::vector<Weight> RouteDistribution(const StaticGraph& ebg, FileName od_table) {
-    // read trip frequency matrix
-    std::vector<NodeID> distribution;
-    return distribution;
-}
+//std::vector<Weight> RouteDistribution(const StaticGraph& ebg, FileName od_table) {
+//    // read trip frequency matrix
+//    std::vector<NodeID> distribution;
+//    return distribution;
+//}
 
 NodeID parse_id(const char* str) { return static_cast<NodeID>(std::strtoul(str, nullptr, 10)); }
 
